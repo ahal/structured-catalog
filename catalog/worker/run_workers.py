@@ -6,6 +6,7 @@ import sys
 import time
 
 from mozlog.structured import commandline
+from request.exceptions import HTTPError
 
 from ..queue import all_queues
 from .worker import process_test_job
@@ -29,7 +30,12 @@ def burst_worker(qname):
     q = all_queues[qname]()
     data = q.get()
     while data:
-        process_test_job(data)
+        try:
+            process_test_job(data)
+        except HTTPError as e:
+            if e.response.status_code == 404:
+                # the structured log no longer exists
+                q.remove(data)
         data = q.get()
 
 def rq_worker(qname):
