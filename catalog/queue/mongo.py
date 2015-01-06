@@ -9,8 +9,8 @@ def do_delayed_imports():
 
 class MongoQueue(BaseQueue):
     _lock = Lock()
-    processed_count = None
-    dot_encoding = '\x95\x25\xab\x6e'
+    dot_encoding = '!@@__@'
+    max_score = None
 
     def __init__(self):
         do_delayed_imports()
@@ -34,23 +34,23 @@ class MongoQueue(BaseQueue):
         self.encode_blobber_file_keys(job)
         job = {
             'payload': job,
-            'processed_count': 0,
+            'score': 0,
         }
         self.db.jobs.insert(job)
 
-    def get(self, processed_count=None):
+    def get(self, max_score=None):
         self._lock.acquire()
         try:
-            if self.processed_count is None:
-                self.processed_count = processed_count or \
-                        min(self.db.jobs.distinct('processed_count'))
+            if self.max_score is None:
+                self.max_score = max_score or \
+                        max(self.db.jobs.distinct('score'))
 
             # this assumes jobs don't need to be re-processed in order
-            job = self.db.jobs.find_one({'processed_count': self.processed_count})
+            job = self.db.jobs.find_one({'score': {'$lte': self.max_score})
             if not job:
                 return
 
-            job['processed_count'] += 1
+            job['score'] = self.max_score + 1
             self.db.jobs.save(job)
             job = job['payload']
             self.decode_blobber_file_keys(job)
