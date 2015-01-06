@@ -1,4 +1,4 @@
-from multiprocessing import Lock
+from multiprocessing import Lock, Value
 
 from .base import BaseQueue
 
@@ -9,8 +9,8 @@ def do_delayed_imports():
 
 class MongoQueue(BaseQueue):
     _lock = Lock()
+    max_score = Value('i', -1)
     dot_encoding = '!@@__@'
-    max_score = None
 
     def __init__(self):
         do_delayed_imports()
@@ -38,19 +38,18 @@ class MongoQueue(BaseQueue):
         }
         self.db.jobs.insert(job)
 
-    def get(self, max_score=None):
+    def get(self):
         self._lock.acquire()
         try:
-            if self.max_score is None:
-                self.max_score = max_score or \
-                        max(self.db.jobs.distinct('score'))
+            if self.max_score.value == -1:
+                self.max_score.value = max(self.db.jobs.distinct('score'))
 
             # this assumes jobs don't need to be re-processed in order
-            job = self.db.jobs.find_one({'score': {'$lte': self.max_score}})
+            job = self.db.jobs.find_one({'score': {'$lte': self.max_score.value}})
             if not job:
                 return
 
-            job['score'] = self.max_score + 1
+            job['score'] = self.max_score.value + 1
             self.db.jobs.save(job)
             job = job['payload']
             self.decode_blobber_file_keys(job)
