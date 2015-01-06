@@ -15,16 +15,16 @@ class MongoQueue(BaseQueue):
     def __init__(self):
         do_delayed_imports()
         BaseQueue.__init__(self)
-        self.client = pymongo.MongoClient('localhost', 27012)
+        self.client = pymongo.MongoClient('localhost', 27017)
         self.db = self.client.structured_catalog
 
-    def encode_blobber_file_keys(job):
+    def encode_blobber_file_keys(self, job):
         blobber_files = {}
         for k, v in job['blobber_files'].iteritems():
             blobber_files[k.replace('.', self.dot_encoding)] = v
         job['blobber_files'] = blobber_files
 
-    def decode_blobber_file_keys(job):
+    def decode_blobber_file_keys(self, job):
         blobber_files = {}
         for k, v in job['blobber_files'].iteritems():
             blobber_files[k.replace(self.dot_encoding, '.')] = v
@@ -46,7 +46,7 @@ class MongoQueue(BaseQueue):
                         max(self.db.jobs.distinct('score'))
 
             # this assumes jobs don't need to be re-processed in order
-            job = self.db.jobs.find_one({'score': {'$lte': self.max_score})
+            job = self.db.jobs.find_one({'score': {'$lte': self.max_score}})
             if not job:
                 return
 
